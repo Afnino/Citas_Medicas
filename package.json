@@ -1,0 +1,12 @@
+{
+  "name": "demo-node",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n servidor,cliente -c blue,green \"npm run dev --prefix servidor\" \"npm run dev --prefix cliente\"",
+    "dev:servidor": "npm run dev --prefix servidor",
+    "dev:cliente": "npm run dev --prefix cliente"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
