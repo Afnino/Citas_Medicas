@@ -4,6 +4,7 @@ import 'dayjs/locale/es'
 import { Show, SignInButton, SignUpButton, UserButton } from '@clerk/react'
 import { AppShell, Button, Group, Stack, Text, TextInput, Title } from '@mantine/core'
 import { DayView } from '@mantine/schedule'
+import { Table } from '@mantine/core';
 
 const today = dayjs().format('YYYY-MM-DD')
 
@@ -40,25 +41,27 @@ const events = [
 
 function App() {
   const [userId, setUserId] = useState('')
-  const [email, setEmail] = useState('')
+  const [rows, setRows] = useState([])
   const [error, setError] = useState('')
 
   async function handleSubmit(event) {
     event.preventDefault()
-    setEmail('')
+    setRows([])
     setError('')
 
     const response = await fetch(
-      `${import.meta.env.SERVER_URL}/email?userId=${encodeURIComponent(userId)}`,
+      `${import.meta.env.SERVER_URL}/doctors`,
     )
     const data = await response.json()
 
     if (!response.ok) {
-      setError(data.error ?? 'No se pudo obtener el email')
+      setError(data.error ?? 'No se pudo obtener la lista de médicos')
       return
     }
 
-    setEmail(data.email)
+    setRows(data)
+
+    
   }
 
   return (
@@ -104,17 +107,26 @@ function App() {
           />
           <form onSubmit={handleSubmit}>
             <Stack maw={360}>
-              <TextInput
-                label="ID de usuario"
-                value={userId}
-                onChange={(event) => setUserId(event.currentTarget.value)}
-                required
-              />
+              
               <Button type="submit">Enviar</Button>
-              {email ? <Text>{email}</Text> : null}
+              
               {error ? <Text c="red">{error}</Text> : null}
             </Stack>
           </form>
+         <Table>
+  <Table.Thead>
+    <Table.Tr>
+      <Table.Th>Nombre</Table.Th>
+      <Table.Th>Especialidad</Table.Th>
+    </Table.Tr>
+  </Table.Thead>
+  <Table.Tbody>{rows.map((row) => (
+    <Table.Tr>
+        <Table.Td>{row.name}</Table.Td>
+        <Table.Td>{row.specialty}</Table.Td>
+    </Table.Tr>
+  ))}</Table.Tbody>
+</Table>
         </Stack>
       </AppShell.Main>
     </AppShell>

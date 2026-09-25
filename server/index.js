@@ -10,27 +10,17 @@ app.use(express.json());
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
-app.get("/email", async (req, res) => {
-  const userId = req.query.userId;
-
-  if (!userId) {
-    res.status(400).json({ error: "userId is required" });
-    return;
-  }
-
-  const { data, error } = await supabase
-    .from("users")
-    .select("email")
-    .eq("id", userId)
-    .single();
+app.get("/doctors", async (req, res) => {
+  const { data, error } = await supabase.from("doctors").select("*");
 
   if (error) {
     res.status(500).json({ error: error.message });
     return;
   }
 
-  res.json({ email: data.email });
+  res.json(data);
 });
+
 
 app.listen(port, () => {
   console.log(`http://localhost:${port}`);
