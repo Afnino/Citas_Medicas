@@ -1,74 +1,162 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import dayjs from 'dayjs'
 import 'dayjs/locale/es'
 import { Show, SignInButton, SignUpButton, UserButton } from '@clerk/react'
-import { AppShell, Button, Group, Stack, Text, TextInput, Title } from '@mantine/core'
+import {
+  AppShell,
+  Button,
+  Group,
+  NativeSelect,
+  Stack,
+  Text,
+  TextInput,
+  Title,
+} from '@mantine/core'
 import { DayView } from '@mantine/schedule'
-import { Table } from '@mantine/core';
 
+const API = import.meta.env.SERVER_URL
 const today = dayjs().format('YYYY-MM-DD')
 
-const events = [
-  {
-    id: 1,
-    title: 'Reunión de equipo',
-    start: `${today} 09:00:00`,
-    end: `${today} 09:30:00`,
-    color: 'blue',
-  },
-  {
-    id: 2,
-    title: 'Revisión de código',
-    start: `${today} 11:00:00`,
-    end: `${today} 12:00:00`,
-    color: 'violet',
-  },
-  {
-    id: 3,
-    title: 'Almuerzo',
-    start: `${today} 13:00:00`,
-    end: `${today} 14:00:00`,
-    color: 'orange',
-  },
-  {
-    id: 4,
-    title: 'Llamada con cliente',
-    start: `${today} 15:30:00`,
-    end: `${today} 16:30:00`,
-    color: 'cyan',
-  },
-]
+const coloresEstado = {
+  programada: 'blue',
+  confirmada: 'violet',
+  completada: 'teal',
+  cancelada: 'gray',
+  no_asistio: 'red',
+}
+
+async function api(path, options = {}) {
+  const response = await fetch(`${API}${path}`, {
+    headers: { 'Content-Type': 'application/json', ...options.headers },
+    ...options,
+  })
+  const data = await response.json()
+  if (!response.ok) {
+    throw new Error(data.error ?? 'Error en el servidor')
+  }
+  return data
+}
+
+function nombreCompleto(persona) {
+  if (!persona) return ''
+  return `${persona.nombre} ${persona.apellido}`
+}
 
 function App() {
-  const [userId, setUserId] = useState('')
-  const [rows, setRows] = useState([])
+  const [fecha, setFecha] = useState(today)
+  const [citas, setCitas] = useState([])
+  const [pacientes, setPacientes] = useState([])
+  const [profesionales, setProfesionales] = useState([])
+  const [especialidades, setEspecialidades] = useState([])
+  const [disponibilidad, setDisponibilidad] = useState(null)
+  const [mensaje, setMensaje] = useState('')
   const [error, setError] = useState('')
 
-  async function handleSubmit(event) {
-    event.preventDefault()
-    setRows([])
-    setError('')
+  const [profesionalConsulta, setProfesionalConsulta] = useState('')
+  const [pacienteId, setPacienteId] = useState('')
+  const [profesionalId, setProfesionalId] = useState('')
+  const [especialidadId, setEspecialidadId] = useState('')
+  const [horaInicio, setHoraInicio] = useState('09:00')
+  const [motivo, setMotivo] = useState('')
 
-    const response = await fetch(
-      `${import.meta.env.SERVER_URL}/doctors`,
-    )
-    const data = await response.json()
-
-    if (!response.ok) {
-      setError(data.error ?? 'No se pudo obtener la lista de médicos')
-      return
-    }
-
-    setRows(data)
-
-    
+  async function cargarCatalogo() {
+    const [listaPacientes, listaProfesionales, listaEspecialidades] = await Promise.all([
+      api('/pacientes'),
+      api('/profesionales'),
+      api('/especialidades'),
+    ])
+    setPacientes(listaPacientes)
+    setProfesionales(listaProfesionales)
+    setEspecialidades(listaEspecialidades)
+    setPacienteId((actual) => actual || listaPacientes[0]?.id || '')
+    setProfesionalId((actual) => actual || listaProfesionales[0]?.id || '')
+    setEspecialidadId((actual) => actual || listaEspecialidades[0]?.id || '')
+    setProfesionalConsulta((actual) => actual || listaProfesionales[0]?.id || '')
   }
+
+  async function cargarCitas(dia = fecha) {
+    const lista = await api(`/citas?fecha=${encodeURIComponent(dia)}`)
+    setCitas(lista)
+  }
+
+  useEffect(() => {
+    cargarCatalogo().catch((err) => setError(err.message))
+  }, [])
+
+  useEffect(() => {
+    cargarCitas(fecha).catch((err) => setError(err.message))
+  }, [fecha])
+
+  const events = useMemo(
+    () =>
+      citas
+        .filter((cita) => cita.estado !== 'cancelada')
+        .map((cita) => ({
+          id: cita.id,
+          title: `${nombreCompleto(cita.pacientes)} · ${cita.especialidades?.nombre ?? ''}`,
+          start: `${cita.fecha} ${cita.hora_inicio}`,
+          end: `${cita.fecha} ${cita.hora_fin}`,
+          color: coloresEstado[cita.estado] ?? 'blue',
+        })),
+    [citas],
+  )
+
+  async function consultarDisponibilidad(event) {
+    event.preventDefault()
+    setError('')
+    setMensaje('')
+    try {
+      const data = await api(
+        `/disponibilidad?fecha=${encodeURIComponent(fecha)}&profesionalId=${encodeURIComponent(profesionalConsulta)}`,
+      )
+      setDisponibilidad(data)
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  async function agendarCita(event) {
+    event.preventDefault()
+    setError('')
+    setMensaje('')
+    try {
+      await api('/citas', {
+        method: 'POST',
+        body: JSON.stringify({
+          pacienteId,
+          profesionalId,
+          especialidadId,
+          fecha,
+          horaInicio,
+          motivo,
+        }),
+      })
+      setMensaje('Cita agendada')
+      await cargarCitas(fecha)
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  async function cancelarCita(id) {
+    setError('')
+    setMensaje('')
+    try {
+      await api(`/citas/${id}/cancelar`, { method: 'PATCH', body: JSON.stringify({}) })
+      setMensaje('Cita cancelada')
+      await cargarCitas(fecha)
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  const slots = disponibilidad?.profesionales?.[0]?.slots ?? []
 
   return (
     <AppShell header={{ height: 64 }} padding="md">
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between">
-          <Text fw={700}>Demo</Text>
+          <Text fw={700}>Citas médicas</Text>
           <Group gap="sm">
             <Show when="signed-out">
               <SignInButton mode="modal">
@@ -86,9 +174,15 @@ function App() {
       </AppShell.Header>
       <AppShell.Main>
         <Stack maw={720} mx="auto" mt="xl" gap="xl">
-          <Title order={2}>Inicio</Title>
+          <Title order={2}>Agenda</Title>
+          <TextInput
+            type="date"
+            label="Fecha"
+            value={fecha}
+            onChange={(event) => setFecha(event.currentTarget.value)}
+          />
           <DayView
-            date={today}
+            date={fecha}
             events={events}
             locale="es"
             startTime="08:00:00"
@@ -105,28 +199,95 @@ function App() {
               year: 'Año',
             }}
           />
-          <form onSubmit={handleSubmit}>
-            <Stack maw={360}>
-              
-              <Button type="submit">Enviar</Button>
-              
-              {error ? <Text c="red">{error}</Text> : null}
+
+          <Title order={3}>Citas del día</Title>
+          {citas.length === 0 ? (
+            <Text c="dimmed">No hay citas para esta fecha.</Text>
+          ) : (
+            citas.map((cita) => (
+              <Group key={cita.id} justify="space-between" align="flex-start">
+                <Text size="sm">
+                  {String(cita.hora_inicio).slice(0, 5)} · {nombreCompleto(cita.pacientes)} con{' '}
+                  {nombreCompleto(cita.profesionales)} ({cita.estado})
+                </Text>
+                {cita.estado === 'programada' || cita.estado === 'confirmada' ? (
+                  <Button size="xs" color="red" variant="light" onClick={() => cancelarCita(cita.id)}>
+                    Cancelar
+                  </Button>
+                ) : null}
+              </Group>
+            ))
+          )}
+
+          <form onSubmit={consultarDisponibilidad}>
+            <Stack>
+              <Title order={3}>Disponibilidad del especialista</Title>
+              <NativeSelect
+                label="Profesional"
+                value={profesionalConsulta}
+                onChange={(event) => setProfesionalConsulta(event.currentTarget.value)}
+                data={profesionales.map((item) => ({
+                  value: item.id,
+                  label: nombreCompleto(item),
+                }))}
+              />
+              <Button type="submit">Consultar horarios libres</Button>
+              {slots.map((slot) => (
+                <Text key={`${slot.horaInicio}-${slot.horaFin}`} size="sm" c={slot.disponible ? undefined : 'dimmed'}>
+                  {slot.horaInicio} - {slot.horaFin} · {slot.disponible ? 'Libre' : 'Ocupado'}
+                </Text>
+              ))}
             </Stack>
           </form>
-         <Table>
-  <Table.Thead>
-    <Table.Tr>
-      <Table.Th>Nombre</Table.Th>
-      <Table.Th>Especialidad</Table.Th>
-    </Table.Tr>
-  </Table.Thead>
-  <Table.Tbody>{rows.map((row) => (
-    <Table.Tr>
-        <Table.Td>{row.name}</Table.Td>
-        <Table.Td>{row.specialty}</Table.Td>
-    </Table.Tr>
-  ))}</Table.Tbody>
-</Table>
+
+          <form onSubmit={agendarCita}>
+            <Stack>
+              <Title order={3}>Agendar cita</Title>
+              <NativeSelect
+                label="Paciente"
+                value={pacienteId}
+                onChange={(event) => setPacienteId(event.currentTarget.value)}
+                data={pacientes.map((item) => ({
+                  value: item.id,
+                  label: nombreCompleto(item),
+                }))}
+              />
+              <NativeSelect
+                label="Profesional"
+                value={profesionalId}
+                onChange={(event) => setProfesionalId(event.currentTarget.value)}
+                data={profesionales.map((item) => ({
+                  value: item.id,
+                  label: nombreCompleto(item),
+                }))}
+              />
+              <NativeSelect
+                label="Especialidad"
+                value={especialidadId}
+                onChange={(event) => setEspecialidadId(event.currentTarget.value)}
+                data={especialidades.map((item) => ({
+                  value: item.id,
+                  label: item.nombre,
+                }))}
+              />
+              <TextInput
+                label="Hora de inicio"
+                type="time"
+                value={horaInicio}
+                onChange={(event) => setHoraInicio(event.currentTarget.value)}
+                required
+              />
+              <TextInput
+                label="Motivo"
+                value={motivo}
+                onChange={(event) => setMotivo(event.currentTarget.value)}
+              />
+              <Button type="submit">Agendar</Button>
+            </Stack>
+          </form>
+
+          {mensaje ? <Text c="teal">{mensaje}</Text> : null}
+          {error ? <Text c="red">{error}</Text> : null}
         </Stack>
       </AppShell.Main>
     </AppShell>
