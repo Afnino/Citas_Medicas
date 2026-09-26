@@ -60,3 +60,7 @@ export function generarSlots(horario, duracionMinutos, citasOcupadas) {
 
   return slots;
 }
+
+export function puedeCancelarse(estado) {
+  return ESTADOS_ACTIVOS.includes(estado);
+}
