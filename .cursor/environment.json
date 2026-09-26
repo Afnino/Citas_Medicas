@@ -1,0 +1,15 @@
+{
+  "name": "demo-node",
+  "install": "npm ci && npm ci --prefix server && npm ci --prefix client",
+  "terminals": [
+    {
+      "name": "server",
+      "command": "cd server && SUPABASE_URL=\"${SUPABASE_URL:-https://placeholder.supabase.co}\" SUPABASE_KEY=\"${SUPABASE_KEY:-placeholder-key}\" node --watch index.js"
+    },
+    {
+      "name": "client",
+      "command": "npm run dev --prefix client -- --host"
+    }
+  ],
+  "ports": [3001, 5173]
+}
