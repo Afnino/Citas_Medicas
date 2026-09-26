@@ -1,9 +1,10 @@
-import express from "express";
 import cors from "cors";
+import express from "express";
 import { crearRutasCatalogo } from "./rutas-catalogo.js";
 import { crearRutasCitas } from "./rutas-citas.js";
+import { crearRutasIA } from "./rutas-ia.js";
 
-export function crearApp({ casosCatalogo, casosCitas }) {
+export function crearApp({ casosCatalogo, casosCitas, casosIA }) {
   const app = express();
   app.use(cors({ origin: "*" }));
   app.use(express.json());
@@ -34,5 +35,6 @@ export function crearApp({ casosCatalogo, casosCitas }) {
 
   app.use(crearRutasCatalogo(casosCatalogo));
   app.use(crearRutasCitas(casosCitas));
+  app.use(crearRutasIA(casosIA));
   return app;
 }
