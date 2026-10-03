@@ -1,0 +1,12 @@
+{
+  "name": "citas-medicas",
+  "install": "bash .cursor/install.sh",
+  "start": "bash .cursor/start.sh",
+  "terminals": [
+    {
+      "name": "api",
+      "command": "npm run dev"
+    }
+  ],
+  "ports": [4000]
+}
